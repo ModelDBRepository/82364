@@ -1,0 +1,135 @@
+//////////// Subiculum model ///////////////
+
+load_file("nrngui.hoc")
+cvode_active(1)
+
+xopen("./S40.hoc")
+
+create bar
+bar{
+	L = 100
+	diam = 7
+	insert pas g_pas = 1
+	insert hd ghdbar_hd = 0
+	pt3dadd(60,-400,0,7)
+	pt3dadd(60,-500,0,7)
+}
+
+access soma
+distance(0,.5)
+
+// parameters
+
+tstop	= 800
+dt		= 0.025
+celsius = 33.0
+Vrest 	= -65
+Rm 		= 40000
+epas	= -67
+Cm    	= 1
+RaAll	= 150
+RaAx 	= 50
+e_hd	= -25
+ghd		= 1.2e-5   	// [S/cm2]
+h_st	= 1.7		// gradient of Ih density (increase per 100 um)
+
+
+// Cell setup
+
+proc cell_setup() {
+	forsec soma_list {
+		insert pas
+			e_pas	= epas
+			g_pas 	= 1/Rm
+			Ra		= RaAll
+			cm		= Cm
+		insert hd	ghdbar_hd	= 0	vhalfl_hd = -73 kl_hd = -8
+	}
+
+	forsec apical_list{
+		insert pas
+			e_pas	= epas
+			g_pas 	= 1/Rm
+			Ra		= RaAll
+			cm		= Cm
+		insert hd	ghdbar_hd 	= 0
+		for (x) if (x>0 && x<1) {
+			xdist = distance(x)
+			if (xdist>500) {xdist=500}
+			if (xdist > 100){
+					vhalfl_hd(x) = -81 kl_hd = -8
+			} else {
+					vhalfl_hd(x) = -73 kl_hd = -8
+			}
+		}
+	}
+	forsec basal_list{
+		insert pas
+			e_pas	= epas
+			g_pas 	= 1/Rm
+			Ra		= RaAll
+			cm		= Cm
+		insert hd	ghdbar_hd 	= 0
+		for (x) if (x>0 && x<1) {
+			xdist = 0
+			if (xdist > 100){
+					vhalfl_hd(x) = -81 kl_hd = -8
+			} else {
+					vhalfl_hd(x) = -73 kl_hd = -8
+			}
+		}
+	}
+	forsec axon_list {
+		insert pas
+			e_pas	= Vrest
+			g_pas 	= 1/Rm
+			Ra		= RaAx
+			cm		= Cm
+	}
+    forall {
+        v	= Vrest
+        if (ismembrane("hd")) {ehd_hd = e_hd}
+	}
+    qtl_hd = 0.5
+}
+
+cell_setup()
+
+proc init(){
+	t=0
+	finitialize(Vrest)
+	cvode.re_init()
+}
+
+proc init_rest(){
+	init()
+	forall {
+		if(ismembrane("hd")){
+			for(x) if (x>0 && x<1) e_pas(x) = (g_pas(x)*v(x) + i_hd(x))/g_pas(x)
+		} else {
+			e_pas = Vrest
+			g_pas = 1/Rm
+		}
+	}
+	init()
+}
+
+proc h_density() {
+	soma distance(0,.5)
+	forall {
+		if(ismembrane("hd")) {
+			for (x) if (x>0 && x<1) {
+				xdist = distance(x)
+				if (xdist>500) {xdist=500}
+				ifsec basal_list xdist = 0
+				ghdbar_hd(x) = ghd*(1+h_st*xdist/100)
+			}
+		}
+	}
+	init_rest()
+}
+
+init_rest()
+
+load_file("./add_syns.hoc")
+
